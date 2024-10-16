@@ -1,19 +1,16 @@
-## Foundry
+# Wrapped IP 
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+The "Wrapped IP" refer to WETH-9 with additional features through relatively minor changes.
 
-Foundry consists of:
+## Deployments
+[STORY Odyssey Testnet](https://internal.storyscan.xyz/address/0xfa057f2e7515267ffab367d0a769f3fa1489b869) `0xFA057f2e7515267FFAB367D0a769F3Fa1489b869`
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
+## Features
+- Supports [ERC-165](https://eips.ethereum.org/EIPS/eip-165) interface detection.
+- Supports [ERC-2612](https://eips.ethereum.org/EIPS/eip-2612) signed approvals.
+- Supports [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) contract signature verification.
+- Prevents from burning or sending WIP tokens to the contract.
 
 ### Build
 
@@ -27,40 +24,19 @@ $ forge build
 $ forge test
 ```
 
-### Format
+### Deploy on Story Odyssey Testnet
+Create a `.env` file with the following content:
+```shell
+STORY_PRIVATEKEY = <private_key of wallet address to execute command below>
+```
+you can also refer to `.env.example` file for reference.
 
 ```shell
-$ forge fmt
+export STORY_PRIVATE_KEY=<private_key>
+$  forge script script/Deploy.s.sol:Deploy  --fork-url https://odyssey.storyrpc.io/ -v --broadcast --sender <wallet address>  --priority-gas-price 1 --slow --legacy --skip-simulation --verify  --verifier=blockscout --verifier-url=https://internal.storyscan.xyz/api
 ```
+  
 
-### Gas Snapshots
 
-```shell
-$ forge snapshot
-```
 
-### Anvil
 
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
