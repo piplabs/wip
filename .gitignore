@@ -1,6 +1,9 @@
 # Compiler files
 cache/
 out/
+script/
+src/
+test/
 
 # Ignores development broadcast logs
 !/broadcast
