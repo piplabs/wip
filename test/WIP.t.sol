@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 import { Test } from "forge-std/Test.sol";
-import { IWIP, WIP } from "../src/WIP.sol";
+import { WIP } from "../src/WIP.sol";
 
 contract ContractWithoutReceive {}
 
@@ -78,7 +78,7 @@ contract WIPTest is Test {
 
         assertEq(wip.balanceOf(owner), 1 ether);
 
-        vm.expectRevert(IWIP.WIP_IPTransferFailed.selector);
+        vm.expectRevert(WIP.IPTransferFailed.selector);
         vm.prank(owner);
         wip.withdraw(1 ether);
     }
