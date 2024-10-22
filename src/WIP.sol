@@ -16,236 +16,42 @@
 
 pragma solidity 0.8.26;
 
-interface IWIP {
-    function deposit() external payable;
-    function withdraw(uint wad) external;
+import { ERC20 } from "solady/tokens/ERC20.sol";
+/// @notice Wrapped IP implementation.
+/// @author Inspired by WETH9 (https://github.com/dapphub/ds-weth/blob/master/src/weth9.sol)
+contract WIP is ERC20 {
+    event  Deposit(address indexed from, uint amount);
+    event  Withdrawal(address indexed to, uint amount);
 
-    event Deposit(address indexed dst, uint wad);
-    event Withdrawal(address indexed src, uint wad);
-
-    error WIP_IPTransferFailed();
-    error WIP_InvalidSignature();
-    error WIP_ExpiredSignature();
-    error WIP_InvalidTransferRecipient();
-
-    // ERC20
-    function name() external view returns (string memory);
-    function symbol() external view returns (string memory);
-    function decimals() external view returns (uint8);
-
-    function totalSupply() external view returns (uint);
-    function balanceOf(address guy) external view returns (uint);
-    function allowance(address src, address dst) external view returns (uint);
-
-    function approve(address spender, uint wad) external returns (bool);
-    function transfer(address dst, uint wad) external returns (bool);
-    function transferFrom(address src, address dst, uint wad) external returns (bool);
-
-    event Approval(address indexed src, address indexed dst, uint wad);
-    event Transfer(address indexed src, address indexed dst, uint wad);
-
-    // ERC-165
-    function supportsInterface(bytes4 interfaceID) external view returns (bool);
-
-    // ERC-2612
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
-    function nonces(address owner) external view returns (uint);
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-
-    // Permit2
-    function permit2(address owner, address spender, uint amount, uint deadline, bytes calldata signature) external;
-}
-
-contract WIP is IWIP {
-    string public constant override name = "Wrapped IP";
-    string public constant override symbol = "WIP";
-    uint8 public override decimals = 18;
-
-    mapping (address => uint) public override balanceOf;
-    mapping (address => mapping (address => uint)) public override allowance;
-
-    // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
-    bytes32 private constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
-    // bytes4(keccak256("isValidSignature(bytes32,bytes)")
-    bytes4 private constant MAGICVALUE = 0x1626ba7e;
-    mapping(address => uint) public override nonces;
-
-    uint private immutable INITIAL_CHAIN_ID;
-    bytes32 private immutable INITIAL_DOMAIN_SEPARATOR;
-
-    constructor() {
-        INITIAL_CHAIN_ID = block.chainid;
-        INITIAL_DOMAIN_SEPARATOR = _computeDomainSeparator();
-    }
+    error IPTransferFailed();
 
     receive() external payable {
         deposit();
     }
 
-    function supportsInterface(bytes4 interfaceID) external pure override returns (bool) {
-        return
-            // ERC-165
-            interfaceID == this.supportsInterface.selector ||
-            // ERC-2612
-            interfaceID == this.permit.selector ||
-            // Permit2
-            interfaceID == this.permit2.selector;
-    }
-
-    function DOMAIN_SEPARATOR() public view override returns (bytes32) {
-        return block.chainid == INITIAL_CHAIN_ID ? INITIAL_DOMAIN_SEPARATOR : _computeDomainSeparator();
-    }
-
-    function _computeDomainSeparator() private view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
-                0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f,
-                // keccak256(bytes('Wrapped IP')),
-                0x4a24dd8304360c3edc71acded1e27d8467d787ccaeefb153eaaadce60e21753b,
-                // keccak256(bytes("1"))
-                0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6,
-                block.chainid,
-                address(this)
-            )
-        );
-    }
-
     function deposit() public payable {
-        balanceOf[msg.sender] += msg.value;
+        _mint(msg.sender, msg.value);
         emit Deposit(msg.sender, msg.value);
     }
 
-    function withdraw(uint value) external override {
-        balanceOf[msg.sender] -= value;
+    function withdraw(uint value) external {
+        _burn(msg.sender, value);
         (bool success, ) = msg.sender.call{value: value}("");
         if (!success) {
-            revert WIP_IPTransferFailed();
+            revert IPTransferFailed();
         }
         emit Withdrawal(msg.sender, value);
     }
 
-    function totalSupply() external view override returns (uint) {
-        return address(this).balance;
+    function name() public view virtual override returns (string memory) {
+        return "Wrapped IP";
     }
 
-    function approve(address spender, uint value) external override returns (bool) {
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
+    function symbol() public view virtual override returns (string memory) {
+        return "WIP";
+    }
+
+    function _givePermit2InfiniteAllowance() internal view override returns (bool) {
         return true;
-    }
-
-    modifier ensuresRecipient(address to) {
-        // Prevents from burning or sending WIP tokens to the contract.
-        if (to == address(0)) {
-            revert WIP_InvalidTransferRecipient();
-        }
-        if (to == address(this)) {
-            revert WIP_InvalidTransferRecipient();
-        }
-        _;
-    }
-
-    function transfer(address to, uint value) external ensuresRecipient(to) override returns (bool) {
-        balanceOf[msg.sender] -= value;
-        balanceOf[to] += value;
-
-        emit Transfer(msg.sender, to, value);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint value) external ensuresRecipient(to) override returns (bool) {
-        if (from != msg.sender) {
-            uint _allowance = allowance[from][msg.sender];
-            if (_allowance != type(uint).max) {
-                allowance[from][msg.sender] -= value;
-            }
-        }
-
-        balanceOf[from] -= value;
-        balanceOf[to] += value;
-
-        emit Transfer(from, to, value);
-        return true;
-    }
-
-    function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external override {
-        if (block.timestamp > deadline) {
-            revert WIP_ExpiredSignature();
-        }
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                '\x19\x01',
-                DOMAIN_SEPARATOR(),
-                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline))
-            )
-        );
-        address recoveredAddress = ecrecover(digest, v, r, s);
-        if (recoveredAddress != owner) {
-            revert WIP_InvalidSignature();
-        }
-        if (recoveredAddress == address(0)) {
-            revert WIP_InvalidSignature();
-        }
-        allowance[owner][spender] = value;
-        emit Approval(owner, spender, value);
-    }
-
-    function permit2(address owner, address spender, uint value, uint deadline, bytes calldata signature) external override {
-        if (block.timestamp > deadline) {
-            revert WIP_ExpiredSignature();
-        }
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                '\x19\x01',
-                DOMAIN_SEPARATOR(),
-                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline))
-            )
-        );
-        if (!_checkSignature(owner, digest, signature)) {
-            revert WIP_InvalidSignature();
-        }
-        allowance[owner][spender] = value;
-        emit Approval(owner, spender, value);
-    }
-
-    function _checkSignature(address signer, bytes32 hash, bytes memory signature) private view returns (bool) {
-        (address recoveredAddress) = _recover(hash, signature);
-        if (recoveredAddress == signer) {
-            if (recoveredAddress != address(0)) {
-                return true;
-            }
-        }
-
-        (bool success, bytes memory result) = signer.staticcall(
-            abi.encodeWithSelector(MAGICVALUE, hash, signature)
-        );
-        return (
-            success &&
-            result.length == 32 &&
-            abi.decode(result, (bytes32)) == bytes32(MAGICVALUE)
-        );
-    }
-
-    function _recover(bytes32 hash, bytes memory signature) private pure returns (address) {
-        if (signature.length != 65) {
-            return address(0);
-        }
-
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-
-        if (uint(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
-            return address(0);
-        }
-
-        return ecrecover(hash, v, r, s);
     }
 }
